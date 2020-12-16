@@ -1,0 +1,61 @@
+import requests
+from bs4 import BeautifulSoup
+from flask import Flask
+from flask_restful import Api
+import json
+
+
+class MetaScore:
+    def __init__(self, title, score):
+        self.title = title
+        self.score = score
+
+    def __str__(self):
+        return "{{ title: {0}, score: {1} }}".format(self.title, self.score)
+
+    def __repr__(self):
+        return str(self)
+
+
+headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, '
+                         'like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+htmlPage = requests.get('http://www.metacritic.com/game/playstation-4?topgames-sort=metascore', headers=headers)
+
+topGames = []
+htmlParser = BeautifulSoup(htmlPage.content, 'html.parser')
+gameSections = htmlParser.findAll("td", {"class", "clamp-summary-wrap"})
+
+for section in gameSections:
+    local_title = section.find("a", {"class": "title"}).get_text()
+    local_score = section.find("div", {"class": "metascore_w large game positive"}).get_text()
+    topGames.append(MetaScore(local_title.strip(), local_score))
+
+print(str(topGames))
+
+app = Flask(__name__)
+api = Api(app)
+
+
+def json_response(response):
+    if 0 == len(response):
+        return "", 204
+    return json.dumps(response), 200
+
+
+# Query the Games
+@app.route("/games", defaults={"title": ""})
+@app.route("/games/<title>")
+def query_games(title):
+    if title == "":
+        return json_response([str(game) for game in topGames])
+    results = []
+    for game in topGames:
+        if game.title == title:
+            results.append(game)
+            break
+    return json_response([str(result) for result in results])
+
+
+
+if __name__ == '__main__':
+    app.run(debug=False)
